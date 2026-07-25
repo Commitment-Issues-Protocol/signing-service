@@ -1,6 +1,7 @@
 import type { Express } from 'express';
 import express from 'express';
 
+import { approvePendingRequest, awaitApproval } from './pending-requests.ts';
 import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
 
@@ -42,8 +43,6 @@ export function createApp(key: SigningKey): Express {
   const app = express();
   app.use(express.json());
 
-  // Signs immediately with no pending-approval state yet, unlike the
-  // long-running, human-approved flow API.md describes for this route.
   app.post('/sign/:requestId', (req, res) => {
     if (!isSignRequestBody(req.body)) {
       res.status(400).json({ error: 'Invalid request body' });
@@ -57,12 +56,18 @@ export function createApp(key: SigningKey): Express {
 
     const data = Buffer.from(req.body.data, 'base64');
     const signature = sign(key, data);
-    res
-      .status(200)
-      .json({ format: 'ssh-ed25519', signature: signature.toString('base64') });
+    void awaitApproval(req.params.requestId, {
+      format: 'ssh-ed25519',
+      signature: signature.toString('base64'),
+    }).then((result) => {
+      res.status(200).json(result);
+    });
   });
 
+  // Approving here (rather than via a real out-of-band human decision) is a
+  // stand-in until that flow exists.
   app.get('/verify/:requestId', (req, res) => {
+    approvePendingRequest(req.params.requestId);
     const url = getVerificationUrl(req.params.requestId);
     res.status(200).json({ url });
   });
