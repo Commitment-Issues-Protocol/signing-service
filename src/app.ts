@@ -5,8 +5,9 @@ import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
 
 /**
- *
- * @param body
+ * Check whether a value has the shape of a sign request body.
+ * @param body - candidate request body
+ * @returns true if body has string fingerprint and data fields
  */
 function isSignRequestBody(
   body: unknown,
