@@ -1,7 +1,13 @@
-import express, { type Express } from 'express';
+import type { Express } from 'express';
+import express from 'express';
+
 import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
 
+/**
+ *
+ * @param body
+ */
 function isSignRequestBody(
   body: unknown,
 ): body is { fingerprint: string; data: string } {
@@ -16,6 +22,10 @@ function isSignRequestBody(
   );
 }
 
+/**
+ *
+ * @param key
+ */
 export function createApp(key: SigningKey): Express {
   const app = express();
   app.use(express.json());
