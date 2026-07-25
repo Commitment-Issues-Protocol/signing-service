@@ -4,10 +4,12 @@
   "description": "",
   "license": "UNLICENSED",
   "author": "",
-  "main": "build/index.js",
+  "main": "dist/index.js",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "start": "npm run build; node dist/index.js",
+    "dev": "tsx src/index.ts",
     "lint": "npx eslint && npx prettier --check .",
     "lint:fix": "npx eslint --fix && npx prettier --write .",
     "test": "node --import tsx --test test/**/*.test.ts"
