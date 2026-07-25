@@ -1,0 +1,14 @@
+{
+  "extends": ["@tsconfig/strictest/tsconfig"],
+  "compilerOptions": {
+    "types": ["node"],
+    "target": "esnext",
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "incremental": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*", "test/**/*"]
+}
