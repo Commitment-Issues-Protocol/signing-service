@@ -3,7 +3,7 @@ import { loadEd25519SigningKey } from './signer/ssh-key.ts';
 
 /**
  * Check if the private signing key environment variable is empty
- * If empty - throw error 
+ * If empty - throw error
  */
 const pem = process.env['SIGNING_PRIVATE_KEY'];
 if (!pem) {
@@ -14,7 +14,7 @@ if (!pem) {
 const port = Number(process.env['PORT'] ?? 3000);
 // Assign the given private signing key to SigningKey var w/in app.ts.
 const key = loadEd25519SigningKey(pem);
-// Express app loaded, exposing the signing HTTP API with the private signing key  
+// Express app loaded, exposing the signing HTTP API with the private signing key
 const app = createApp(key);
 
 // App is instatiated with environment variables on given port (e.g. 3000)
