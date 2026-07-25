@@ -24,8 +24,9 @@ function isSignRequestBody(
 }
 
 /**
- *
- * @param key
+ * Build the Express app exposing the signing HTTP API.
+ * @param key - the signing key requests will be signed with
+ * @returns the configured Express app
  */
 export function createApp(key: SigningKey): Express {
   const app = express();
