@@ -42,7 +42,9 @@ export function createApp(key: SigningKey): Express {
   const app = express();
   app.use(express.json());
 
-  app.post('/sign', (req, res) => {
+  // Signs immediately with no pending-approval state yet, unlike the
+  // long-running, human-approved flow API.md describes for this route.
+  app.post('/sign/:requestId', (req, res) => {
     if (!isSignRequestBody(req.body)) {
       res.status(400).json({ error: 'Invalid request body' });
       return;
