@@ -5,9 +5,9 @@
     "target": "esnext",
     "noImplicitAny": true,
     "noImplicitThis": true,
-    "incremental": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true
   },
   "include": ["src/**/*", "test/**/*"]
