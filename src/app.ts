@@ -24,6 +24,16 @@ function isSignRequestBody(
 }
 
 /**
+ * Get the human-facing verification URL for a pending signing request. Not
+ * yet implemented.
+ * @param requestId - ID of the pending signing request
+ * @returns the verification URL for a human to approve/reject the request
+ */
+function getVerificationUrl(requestId: string): string {
+  return `https://example.com/verify/${requestId}`;
+}
+
+/**
  * Build the Express app exposing the signing HTTP API.
  * @param key - the signing key requests will be signed with
  * @returns the configured Express app
@@ -48,6 +58,11 @@ export function createApp(key: SigningKey): Express {
     res
       .status(200)
       .json({ format: 'ssh-ed25519', signature: signature.toString('base64') });
+  });
+
+  app.get('/verify/:requestId', (req, res) => {
+    const url = getVerificationUrl(req.params.requestId);
+    res.status(200).json({ url });
   });
 
   app.use(
