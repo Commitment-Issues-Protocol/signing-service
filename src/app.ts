@@ -1,7 +1,11 @@
 import type { Express } from 'express';
 import express from 'express';
 
-import { approvePendingRequest, awaitApproval } from './pending-requests.ts';
+import {
+  approvePendingRequest,
+  awaitApproval,
+  hasPendingRequest,
+} from './pending-requests.ts';
 import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
 
@@ -54,8 +58,14 @@ export function createApp(key: SigningKey): Express {
       return;
     }
 
+    if (hasPendingRequest(req.params.requestId)) {
+      res.status(409).json({ error: 'Request ID already in use' });
+      return;
+    }
+
     const data = Buffer.from(req.body.data, 'base64');
     const signature = sign(key, data);
+
     // Sign request is either approved or rejected (see pending-requests.ts for details)
     // 403 error thrown if human rejects sign request themselves
     void awaitApproval(req.params.requestId, {
@@ -66,7 +76,8 @@ export function createApp(key: SigningKey): Express {
         res.status(200).json(result);
       })
       .catch((error: unknown) => {
-        const reason = error instanceof Error ? error.message : 'Human rejected the request';
+        const reason =
+          error instanceof Error ? error.message : 'Human rejected the request';
         res.status(403).json({ error: reason });
       });
   });
