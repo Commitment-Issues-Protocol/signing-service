@@ -81,19 +81,17 @@ function loadWorldIdConfig(): WorldIdConfig {
 }
 
 /**
- * Verify a completed World ID proof against the Developer Portal, and confirm
- * its signal_hash matches the payload we asked to be signed. The portal only
- * confirms the proof is cryptographically valid for whatever signal_hash is
- * embedded in it — it has no idea what payload we expected, so that
- * comparison is ours to make.
+ * Verify a completed World ID proof
  * @param rpId - the RP ID the proof was requested against
  * @param signal - the signal we requested the proof for (our payload)
+ * @param nonce - the nonce we minted via signRequest for this request
  * @param idkitResponse - the raw IDKit result returned by World App
- * @returns true if the portal confirms validity and the signal matches
+ * @returns true only if every check passes
  */
 async function verifyProof(
   rpId: string,
   signal: string,
+  nonce: string,
   idkitResponse: unknown,
 ): Promise<boolean> {
   const response = await fetch(
@@ -111,17 +109,30 @@ async function verifyProof(
     body,
   );
 
-  if (!response.ok) {
+  const verify = body as { success?: boolean } | undefined;
+  const result = idkitResponse as {
+    nonce?: string;
+    user_presence_completed?: boolean;
+    responses?: { signal_hash?: string }[];
+  };
+
+  const checks: [string, boolean][] = [
+    ['portal rejected the proof', verify?.success === true],
+    ['nonce did not match the one we minted', result.nonce === nonce],
+    ['no fresh liveness', result.user_presence_completed === true],
+    [
+      'proof was not bound to this payload',
+      result.responses?.[0]?.signal_hash === hashSignal(signal),
+    ],
+  ];
+
+  const failed = checks.find(([, passed]) => !passed);
+  if (failed) {
+    console.warn(`[selfie] verification failed: ${failed[0]}`);
     return false;
   }
 
-  const result = idkitResponse as {
-    responses?: { signal_hash?: string }[];
-  };
-  const signalHash = result.responses?.[0]?.signal_hash;
-
-  // Compare with hashToField signal
-  return signalHash === hashSignal(signal);
+  return true;
 }
 
 /**
@@ -154,6 +165,8 @@ export async function requestSelfieCheck(
       signature: sig,
     },
     allow_legacy_proofs: true,
+    // Forces a fresh liveness check rather than accepting a held credential.
+    require_user_presence: true,
     environment: config.environment,
   }).preset(selfieCheckLegacy({ signal }));
 
@@ -176,6 +189,7 @@ export async function requestSelfieCheck(
       const verified = await verifyProof(
         config.rpId,
         signal,
+        nonce,
         completion.result,
       );
       if (!verified) {
