@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createApp } from './app.ts';
 import { loadEd25519SigningKey } from './signer/ssh-key.ts';
 
