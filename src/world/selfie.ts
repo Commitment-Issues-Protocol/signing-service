@@ -41,7 +41,7 @@ async function fetchWithFileSupport(
 // Override global fetch
 globalThis.fetch = fetchWithFileSupport;
 
-const SELFIE_CHECK_ACTION_PREFIX = 'git_sign';
+const SELFIE_CHECK_ACTION_PREFIX = 'git-sign';
 const POLL_INTERVAL_MS = 2_000;
 const POLL_TIMEOUT_MS = 120_000;
 
