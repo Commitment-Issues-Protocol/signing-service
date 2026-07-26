@@ -1,5 +1,10 @@
 const PENDING_REQUEST_TIMEOUT_MS = 60_000;
 
+type PendingSignResult = {
+  format: 'ssh-ed25519';
+  signature: string;
+};
+
 type PendingSignRequest = {
   approve: () => void;
   reject: (reason: string) => void;
@@ -42,17 +47,6 @@ function awaitApproval(
 }
 
 /**
- * Check whether a request ID already has a pending, undecided request,
- * to guard against a caller reusing a requestId for an in-flight request
- * and silently clobbering the original one's approve/reject callbacks.
- * @param requestId - request ID to check
- * @returns true if a pending request with this ID already exists
- */
-function hasPendingRequest(requestId: string): boolean {
-  return pendingRequests.has(requestId);
-}
-
-/**
  * Approve a pending signing request, releasing its signature to the
  * waiting `POST /sign/:requestId` call.
  * @param requestId - ID of the pending request to approve
@@ -87,14 +81,10 @@ function rejectPendingRequest(requestId: string, reason: string): boolean {
   return true;
 }
 
-export type PendingSignResult = {
-  format: 'ssh-ed25519';
-  signature: string;
-};
-
 export {
+  pendingRequests,
   awaitApproval,
-  hasPendingRequest,
   approvePendingRequest,
   rejectPendingRequest,
 };
+export type { PendingSignResult };

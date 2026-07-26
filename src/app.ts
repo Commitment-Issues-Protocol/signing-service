@@ -1,11 +1,7 @@
 import type { Express } from 'express';
 import express from 'express';
 
-import {
-  approvePendingRequest,
-  awaitApproval,
-  hasPendingRequest,
-} from './pending-requests.ts';
+import { awaitApproval, pendingRequests } from './pending-requests.ts';
 import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
 
@@ -58,7 +54,7 @@ export function createApp(key: SigningKey): Express {
       return;
     }
 
-    if (hasPendingRequest(req.params.requestId)) {
+    if (pendingRequests.has(req.params.requestId)) {
       res.status(409).json({ error: 'Request ID already in use' });
       return;
     }
@@ -77,15 +73,17 @@ export function createApp(key: SigningKey): Express {
       })
       .catch((error: unknown) => {
         const reason =
-          error instanceof Error ? error.message : 'Human rejected the request';
+          error instanceof Error ? error.message : 'Error rejected';
         res.status(403).json({ error: reason });
       });
   });
 
-  // Approving here (rather than via a real out-of-band human decision) is a
-  // stand-in until that flow exists.
   app.get('/verify/:requestId', (req, res) => {
-    approvePendingRequest(req.params.requestId);
+    if (!pendingRequests.has(req.params.requestId)) {
+      res.status(410).json({ error: 'Request not found or already decided' });
+      return;
+    }
+
     const url = getVerificationUrl(req.params.requestId);
     res.status(200).json({ url });
   });
