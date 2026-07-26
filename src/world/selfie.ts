@@ -6,7 +6,7 @@ import { signRequest } from '@worldcoin/idkit-core/signing';
 import {
   approvePendingRequest,
   rejectPendingRequest,
-} from './pending-requests.ts';
+} from '../pending-requests.ts';
 
 // idkit-core loads its WASM binary via `fetch(new URL('idkit_wasm_bg.wasm',
 // import.meta.url))`, which resolves to a local file:// URL under plain

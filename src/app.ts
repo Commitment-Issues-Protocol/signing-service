@@ -8,7 +8,7 @@ import {
 } from './pending-requests.ts';
 import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
-import { requestSelfieCheck } from './world-id.ts';
+import { requestSelfieCheck } from './world/selfie.ts';
 
 /**
  * Check whether a value has the shape of a sign request body.
