@@ -34,6 +34,7 @@
     "typescript-eslint": "^8.65.0"
   },
   "dependencies": {
+    "@worldcoin/agentkit": "^0.2.0",
     "@worldcoin/idkit-core": "^4.2.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"

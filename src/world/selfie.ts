@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { IDKit, selfieCheckLegacy } from '@worldcoin/idkit-core';
+import { hashSignal } from '@worldcoin/idkit-core/hashing';
 import { signRequest } from '@worldcoin/idkit-core/signing';
 
 import {
@@ -40,7 +41,7 @@ async function fetchWithFileSupport(
 // Override global fetch
 globalThis.fetch = fetchWithFileSupport;
 
-const SELFIE_CHECK_ACTION = 'sign-request';
+const SELFIE_CHECK_ACTION_PREFIX = 'git_sign';
 const POLL_INTERVAL_MS = 2_000;
 const POLL_TIMEOUT_MS = 120_000;
 
@@ -80,13 +81,19 @@ function loadWorldIdConfig(): WorldIdConfig {
 }
 
 /**
- * Verify a completed World ID proof against the Developer Portal.
+ * Verify a completed World ID proof against the Developer Portal, and confirm
+ * its signal_hash matches the payload we asked to be signed. The portal only
+ * confirms the proof is cryptographically valid for whatever signal_hash is
+ * embedded in it — it has no idea what payload we expected, so that
+ * comparison is ours to make.
  * @param rpId - the RP ID the proof was requested against
+ * @param signal - the signal we requested the proof for (our payload)
  * @param idkitResponse - the raw IDKit result returned by World App
- * @returns true if the Developer Portal confirms the proof is valid
+ * @returns true if the portal confirms validity and the signal matches
  */
 async function verifyProof(
   rpId: string,
+  signal: string,
   idkitResponse: unknown,
 ): Promise<boolean> {
   const response = await fetch(
@@ -98,27 +105,47 @@ async function verifyProof(
     },
   );
 
-  return response.ok;
+  const body: unknown = await response.json().catch(() => undefined);
+  console.log(
+    `[selfie] portal verify response (${response.status.toString()}):`,
+    body,
+  );
+
+  if (!response.ok) {
+    return false;
+  }
+
+  const result = idkitResponse as {
+    responses?: { signal_hash?: string }[];
+  };
+  const signalHash = result.responses?.[0]?.signal_hash;
+
+  // Compare with hashToField signal
+  return signalHash === hashSignal(signal);
 }
 
 /**
- * Start a Selfie Check verification gating a pending sign request. Resolves
- * or rejects the pending request (see pending-requests.ts) once the human
- * completes the check, fails it, or the request times out.
+ * Request proven selfie check
  * @param requestId - ID of the pending signing request to gate
+ * @param data - the raw bytes about to be signed, carried into the proof
  * @returns the connect URL a human opens in World App to complete the check
  */
-export async function requestSelfieCheck(requestId: string): Promise<string> {
+export async function requestSelfieCheck(
+  requestId: string,
+  data: Buffer,
+): Promise<string> {
   const config = loadWorldIdConfig();
+  const signal = data.toString('base64');
+  const action = `${SELFIE_CHECK_ACTION_PREFIX}:${hashSignal(signal)}`;
 
   const { sig, nonce, createdAt, expiresAt } = signRequest({
     signingKeyHex: config.signingKeyHex,
-    action: SELFIE_CHECK_ACTION,
+    action,
   });
 
   const request = await IDKit.request({
     app_id: config.appId,
-    action: SELFIE_CHECK_ACTION,
+    action,
     rp_context: {
       rp_id: config.rpId,
       nonce,
@@ -128,7 +155,7 @@ export async function requestSelfieCheck(requestId: string): Promise<string> {
     },
     allow_legacy_proofs: true,
     environment: config.environment,
-  }).preset(selfieCheckLegacy({ signal: requestId }));
+  }).preset(selfieCheckLegacy({ signal }));
 
   void request
     .pollUntilCompletion({
@@ -144,7 +171,13 @@ export async function requestSelfieCheck(requestId: string): Promise<string> {
         return;
       }
 
-      const verified = await verifyProof(config.rpId, completion.result);
+      console.log(`[selfie] ${requestId}: proof received`, completion.result);
+
+      const verified = await verifyProof(
+        config.rpId,
+        signal,
+        completion.result,
+      );
       if (!verified) {
         rejectPendingRequest(
           requestId,

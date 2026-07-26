@@ -74,7 +74,7 @@ export function createApp(key: SigningKey): Express {
     });
 
     // Request selfie check url
-    requestSelfieCheck(req.params.requestId)
+    requestSelfieCheck(req.params.requestId, data)
       .then((connectorUri) => {
         const pending = pendingRequests.get(req.params.requestId);
         if (pending) {
