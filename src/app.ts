@@ -8,12 +8,7 @@ import {
 } from './pending-requests.ts';
 import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
-import {
-  AGENTKIT_HEADER,
-  enforceAgentPolicy,
-  resolveAgent,
-  spendBudget,
-} from './world/agent.ts';
+import { agentKitGuard } from './world/agent.ts';
 import { requestSelfieCheck } from './world/selfie.ts';
 
 /**
@@ -44,6 +39,8 @@ export function createApp(key: SigningKey): Express {
   const app = express();
   app.use(express.json());
 
+  app.use('/sign/:requestId', agentKitGuard);
+
   app.post('/sign/:requestId', (req, res) => {
     void (async (): Promise<void> => {
       if (!isSignRequestBody(req.body)) {
@@ -66,33 +63,6 @@ export function createApp(key: SigningKey): Express {
         );
         res.status(409).json({ error: 'Request ID already in use' });
         return;
-      }
-
-      // Which unique human is behind the agent asking for this signature?
-      const resourceUri = `${req.protocol}://${req.get('host') ?? 'localhost'}${req.originalUrl}`;
-      const identity = await resolveAgent(
-        req.header(AGENTKIT_HEADER),
-        resourceUri,
-      );
-
-      const refusal = enforceAgentPolicy(identity);
-      if (refusal) {
-        console.warn(`[sign] ${req.params.requestId}: ${refusal}`);
-        res.status(403).json({ error: refusal });
-        return;
-      }
-
-      if (identity.status === 'human-backed') {
-        const budget = spendBudget(identity.humanId);
-        if (!budget.allowed) {
-          res.status(429).json({
-            error: `Daily human approval budget exhausted (${budget.used.toString()}/${budget.limit.toString()})`,
-          });
-          return;
-        }
-        console.log(
-          `[agentkit] ${req.params.requestId}: human ${identity.humanId.slice(0, 10)}… budget ${budget.used.toString()}/${budget.limit.toString()}`,
-        );
       }
 
       console.log(

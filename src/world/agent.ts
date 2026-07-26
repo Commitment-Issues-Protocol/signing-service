@@ -23,6 +23,7 @@ import {
   validateAgentkitMessage,
   verifyAgentkitSignature,
 } from '@worldcoin/agentkit';
+import type { RequestHandler } from 'express';
 
 /**
  * How the AgentKit check behaves.
@@ -156,11 +157,45 @@ function enforceAgentPolicy(identity: AgentIdentity): string | null {
   return reason;
 }
 
-export {
-  AGENTKIT_HEADER,
-  resolveAgent,
-  spendBudget,
-  enforceAgentPolicy,
-  agentBook,
+/**
+ * Express middleware gating a route behind AgentKit human-backed identity
+ * resolution and the daily approval budget (see enforceAgentPolicy and
+ * spendBudget above). Honors AGENTKIT_MODE. On refusal, responds and short
+ * circuits instead of calling `next()`.
+ * @param req - the incoming request
+ * @param res - the response, used to short-circuit on refusal
+ * @param next - continues to the next middleware/handler when allowed
+ */
+const agentKitGuard: RequestHandler = (req, res, next) => {
+  void (async (): Promise<void> => {
+    const resourceUri = `${req.protocol}://${req.get('host') ?? 'localhost'}${req.originalUrl}`;
+    const identity = await resolveAgent(
+      req.header(AGENTKIT_HEADER),
+      resourceUri,
+    );
+
+    const refusal = enforceAgentPolicy(identity);
+    if (refusal) {
+      console.warn(`[agentkit] ${req.originalUrl}: ${refusal}`);
+      res.status(403).json({ error: refusal });
+      return;
+    }
+
+    if (identity.status === 'human-backed') {
+      const budget = spendBudget(identity.humanId);
+      if (!budget.allowed) {
+        res.status(429).json({
+          error: `Daily human approval budget exhausted (${budget.used.toString()}/${budget.limit.toString()})`,
+        });
+        return;
+      }
+      console.log(
+        `[agentkit] ${req.originalUrl}: human ${identity.humanId.slice(0, 10)}… budget ${budget.used.toString()}/${budget.limit.toString()}`,
+      );
+    }
+
+    next();
+  })();
 };
-export type { AgentIdentity };
+
+export { agentKitGuard, agentBook };
