@@ -1,3 +1,5 @@
+const PENDING_REQUEST_TIMEOUT_MS = 60_000;
+
 type PendingSignRequest = {
   approve: () => void;
   reject: (reason: string) => void;
@@ -9,22 +11,30 @@ const pendingRequests = new Map<string, PendingSignRequest>();
  * Register a computed signature as pending human approval, correlated by
  * request ID with a later `GET /verify/:requestId` call. For now, approval
  * is triggered directly by `approvePendingRequest` rather than a real
- * out-of-band human decision.
+ * out-of-band human decision. Expires and rejects itself after
+ * `PENDING_REQUEST_TIMEOUT_MS` if left undecided.
  * @param requestId - ID correlating this request with its /verify call
  * @param result - the computed signature awaiting approval
  * @returns a promise that resolves with the result once approved, or rejects
- *   with an Error if the request is rejected
+ *   with an Error if the request is rejected or expires
  */
 function awaitApproval(
   requestId: string,
   result: PendingSignResult,
 ): Promise<PendingSignResult> {
   return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingRequests.delete(requestId);
+      reject(new Error('Request expired without a decision'));
+    }, PENDING_REQUEST_TIMEOUT_MS);
+
     pendingRequests.set(requestId, {
       approve: () => {
+        clearTimeout(timeout);
         resolve(result);
       },
       reject: (reason) => {
+        clearTimeout(timeout);
         reject(new Error(reason));
       },
     });
