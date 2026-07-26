@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { IDKit, selfieCheckLegacy } from '@worldcoin/idkit-core';
 import { signRequest } from '@worldcoin/idkit-core/signing';
 
@@ -5,6 +7,38 @@ import {
   approvePendingRequest,
   rejectPendingRequest,
 } from './pending-requests.ts';
+
+// idkit-core loads its WASM binary via `fetch(new URL('idkit_wasm_bg.wasm',
+// import.meta.url))`, which resolves to a local file:// URL under plain
+// Node.js. Node's built-in fetch doesn't support the file: scheme, so serve
+// those requests from disk ourselves.
+const nodeFetch = globalThis.fetch;
+
+/**
+ * `fetch` replacement that additionally serves `file://` URLs from disk, so
+ * idkit-core's WASM loader works under plain Node.js.
+ * @param input - request URL or Request object
+ * @param init - fetch options, forwarded as-is for non-file URLs
+ * @returns the fetch Response
+ */
+async function fetchWithFileSupport(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const url = input instanceof Request ? input.url : input.toString();
+
+  if (url.startsWith('file://')) {
+    const bytes = await readFile(new URL(url));
+    return new Response(bytes, {
+      headers: { 'content-type': 'application/wasm' },
+    });
+  }
+
+  return nodeFetch(input, init);
+}
+
+// Override global fetch
+globalThis.fetch = fetchWithFileSupport;
 
 const SELFIE_CHECK_ACTION = 'sign-request';
 const POLL_INTERVAL_MS = 2_000;
