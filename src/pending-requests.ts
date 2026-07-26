@@ -8,6 +8,7 @@ type PendingSignResult = {
 type PendingSignRequest = {
   approve: () => void;
   reject: (reason: string) => void;
+  verificationUrl?: string;
 };
 
 const pendingRequests = new Map<string, PendingSignRequest>();
@@ -87,4 +88,4 @@ export {
   approvePendingRequest,
   rejectPendingRequest,
 };
-export type { PendingSignResult };
+export type { PendingSignResult, PendingSignRequest };

@@ -25,13 +25,30 @@ function isSignRequestBody(
 }
 
 /**
- * Get the human-facing verification URL for a pending signing request. Not
- * yet implemented.
+ * Get the human-facing verification URL for a pending signing request,
+ * generating and caching it on first request.
  * @param requestId - ID of the pending signing request
  * @returns the verification URL for a human to approve/reject the request
  */
 function getVerificationUrl(requestId: string): string {
-  return `https://example.com/verify/${requestId}`;
+  const pending = pendingRequests.get(requestId);
+
+  if (!pending) {
+    // How did we get here?
+    return '';
+  }
+
+  // Return already generated URL if exists
+  if (pending.verificationUrl) {
+    return pending.verificationUrl;
+  }
+
+  // Get new URL
+  const url = `https://example.com/verify/${requestId}`;
+
+  // Return
+  pending.verificationUrl = url;
+  return url;
 }
 
 /**
