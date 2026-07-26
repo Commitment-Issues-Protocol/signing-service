@@ -1,4 +1,4 @@
-const PENDING_REQUEST_TIMEOUT_MS = 60_000;
+const PENDING_REQUEST_TIMEOUT_MS = 120_000;
 
 type PendingSignResult = {
   format: 'ssh-ed25519';

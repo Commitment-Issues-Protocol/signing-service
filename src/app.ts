@@ -1,9 +1,14 @@
 import type { Express } from 'express';
 import express from 'express';
 
-import { awaitApproval, pendingRequests } from './pending-requests.ts';
+import {
+  awaitApproval,
+  pendingRequests,
+  rejectPendingRequest,
+} from './pending-requests.ts';
 import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
+import { requestSelfieCheck } from './world-id.ts';
 
 /**
  * Check whether a value has the shape of a sign request body.
@@ -22,33 +27,6 @@ function isSignRequestBody(
     typeof record['fingerprint'] === 'string' &&
     typeof record['data'] === 'string'
   );
-}
-
-/**
- * Get the human-facing verification URL for a pending signing request,
- * generating and caching it on first request.
- * @param requestId - ID of the pending signing request
- * @returns the verification URL for a human to approve/reject the request
- */
-function getVerificationUrl(requestId: string): string {
-  const pending = pendingRequests.get(requestId);
-
-  if (!pending) {
-    // How did we get here?
-    return '';
-  }
-
-  // Return already generated URL if exists
-  if (pending.verificationUrl) {
-    return pending.verificationUrl;
-  }
-
-  // Get new URL
-  const url = `https://example.com/verify/${requestId}`;
-
-  // Return
-  pending.verificationUrl = url;
-  return url;
 }
 
 /**
@@ -90,10 +68,33 @@ export function createApp(key: SigningKey): Express {
 
     // Sign request is either approved or rejected (see pending-requests.ts for details)
     // 403 error thrown if human rejects sign request themselves
-    void awaitApproval(req.params.requestId, {
+    const approval = awaitApproval(req.params.requestId, {
       format: 'ssh-ed25519',
       signature: signature.toString('base64'),
-    })
+    });
+
+    // Request selfie check url
+    requestSelfieCheck(req.params.requestId)
+      .then((connectorUri) => {
+        const pending = pendingRequests.get(req.params.requestId);
+        if (pending) {
+          pending.verificationUrl = connectorUri;
+        }
+      })
+      .catch((error: unknown) => {
+        console.error(
+          `[sign] ${req.params.requestId}: failed to start Selfie Check`,
+          error,
+        );
+        rejectPendingRequest(
+          req.params.requestId,
+          error instanceof Error
+            ? error.message
+            : 'Failed to start Selfie Check',
+        );
+      });
+
+    approval
       .then((result) => {
         console.log(`[sign] ${req.params.requestId}: approved`);
         res.status(200).json(result);
@@ -115,7 +116,8 @@ export function createApp(key: SigningKey): Express {
       return;
     }
 
-    const url = getVerificationUrl(req.params.requestId);
+    const url =
+      pendingRequests.get(req.params.requestId)?.verificationUrl ?? '';
     console.log(`[verify] ${req.params.requestId}: verification URL requested`);
     res.status(200).json({ url });
   });
