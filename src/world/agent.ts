@@ -34,7 +34,17 @@ import type { RequestHandler } from 'express';
  * - `off`     — skip the check entirely
  */
 type AgentkitMode = 'enforce' | 'warn' | 'off';
-const AGENTKIT_MODE: AgentkitMode = 'enforce';
+
+/**
+ * Read the AgentKit enforcement mode from the environment.
+ * @returns the configured mode, defaulting to `enforce` if unset or invalid
+ */
+function loadAgentkitMode(): AgentkitMode {
+  const raw = process.env['WORLD_AGENTKIT'];
+  return raw === 'enforce' || raw === 'warn' ? raw : 'enforce';
+}
+
+const AGENTKIT_MODE: AgentkitMode = loadAgentkitMode();
 
 /** Maximum signings a single human may approve per day. */
 const DAILY_BUDGET_PER_HUMAN = 25; // Gates number of sign requests an agent can make
