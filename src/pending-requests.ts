@@ -42,6 +42,17 @@ function awaitApproval(
 }
 
 /**
+ * Check whether a request ID already has a pending, undecided request,
+ * to guard against a caller reusing a requestId for an in-flight request
+ * and silently clobbering the original one's approve/reject callbacks.
+ * @param requestId - request ID to check
+ * @returns true if a pending request with this ID already exists
+ */
+function hasPendingRequest(requestId: string): boolean {
+  return pendingRequests.has(requestId);
+}
+
+/**
  * Approve a pending signing request, releasing its signature to the
  * waiting `POST /sign/:requestId` call.
  * @param requestId - ID of the pending request to approve
@@ -81,4 +92,9 @@ export type PendingSignResult = {
   signature: string;
 };
 
-export { awaitApproval, approvePendingRequest, rejectPendingRequest };
+export {
+  awaitApproval,
+  hasPendingRequest,
+  approvePendingRequest,
+  rejectPendingRequest,
+};
