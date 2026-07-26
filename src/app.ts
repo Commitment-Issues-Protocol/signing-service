@@ -62,19 +62,28 @@ export function createApp(key: SigningKey): Express {
 
   app.post('/sign/:requestId', (req, res) => {
     if (!isSignRequestBody(req.body)) {
+      console.warn(`[sign] ${req.params.requestId}: invalid request body`);
       res.status(400).json({ error: 'Invalid request body' });
       return;
     }
 
     if (req.body.fingerprint !== key.fingerprint) {
+      console.warn(
+        `[sign] ${req.params.requestId}: unknown key fingerprint ${req.body.fingerprint}`,
+      );
       res.status(404).json({ error: 'Unknown key fingerprint' });
       return;
     }
 
     if (pendingRequests.has(req.params.requestId)) {
+      console.warn(`[sign] ${req.params.requestId}: request ID already in use`);
       res.status(409).json({ error: 'Request ID already in use' });
       return;
     }
+
+    console.log(
+      `[sign] ${req.params.requestId}: request received, awaiting approval`,
+    );
 
     const data = Buffer.from(req.body.data, 'base64');
     const signature = sign(key, data);
@@ -86,22 +95,28 @@ export function createApp(key: SigningKey): Express {
       signature: signature.toString('base64'),
     })
       .then((result) => {
+        console.log(`[sign] ${req.params.requestId}: approved`);
         res.status(200).json(result);
       })
       .catch((error: unknown) => {
         const reason =
           error instanceof Error ? error.message : 'Error rejected';
+        console.log(`[sign] ${req.params.requestId}: rejected (${reason})`);
         res.status(403).json({ error: reason });
       });
   });
 
   app.get('/verify/:requestId', (req, res) => {
     if (!pendingRequests.has(req.params.requestId)) {
+      console.warn(
+        `[verify] ${req.params.requestId}: not found or already decided`,
+      );
       res.status(410).json({ error: 'Request not found or already decided' });
       return;
     }
 
     const url = getVerificationUrl(req.params.requestId);
+    console.log(`[verify] ${req.params.requestId}: verification URL requested`);
     res.status(200).json({ url });
   });
 
