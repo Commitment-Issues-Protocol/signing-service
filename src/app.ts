@@ -56,12 +56,19 @@ export function createApp(key: SigningKey): Express {
 
     const data = Buffer.from(req.body.data, 'base64');
     const signature = sign(key, data);
+    // Sign request is either approved or rejected (see pending-requests.ts for details)
+    // 403 error thrown if human rejects sign request themselves
     void awaitApproval(req.params.requestId, {
       format: 'ssh-ed25519',
       signature: signature.toString('base64'),
-    }).then((result) => {
-      res.status(200).json(result);
-    });
+    })
+      .then((result) => {
+        res.status(200).json(result);
+      })
+      .catch((error: unknown) => {
+        const reason = error instanceof Error ? error.message : 'Human rejected the request';
+        res.status(403).json({ error: reason });
+      });
   });
 
   // Approving here (rather than via a real out-of-band human decision) is a
