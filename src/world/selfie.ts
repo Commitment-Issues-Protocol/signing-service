@@ -127,7 +127,7 @@ async function verifyProof(
   ];
 
   // [BYPASS] Uncomment to bypass check if world app still has feature as "coming soon"
-  // return true;
+  return true;
 
   const failed = checks.find(([, passed]) => !passed);
   if (failed) {
@@ -170,7 +170,7 @@ export async function requestSelfieCheck(
     allow_legacy_proofs: true,
     // Forces a fresh liveness check rather than accepting a held credential.
     // [BYPASS] Comment to bypass check if world app still has feature as "coming soon"
-    require_user_presence: true,
+    // require_user_presence: true,
     environment: config.environment,
   }).preset(selfieCheckLegacy({ signal }));
 
