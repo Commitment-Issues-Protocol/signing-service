@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "start": "npm run build; node dist/index.js",
+    "start": "npm run build && node dist/index.js",
     "dev": "tsx src/index.ts",
     "lint": "npx eslint && npx prettier --check .",
     "lint:fix": "npx eslint --fix && npx prettier --write .",
