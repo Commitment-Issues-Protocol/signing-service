@@ -36,7 +36,7 @@ type AgentkitMode = 'enforce' | 'warn' | 'off';
 const AGENTKIT_MODE: AgentkitMode = 'enforce';
 
 /** Maximum signings a single human may approve per day. */
-const DAILY_BUDGET_PER_HUMAN = 25;
+const DAILY_BUDGET_PER_HUMAN = 25; // Gates number of sign requests an agent can make
 
 /** Result of resolving the caller. */
 type AgentIdentity =

@@ -8,6 +8,12 @@ import {
 } from './pending-requests.ts';
 import { sign } from './signer/index.ts';
 import type { SigningKey } from './signer/ssh-key.ts';
+import {
+  AGENTKIT_HEADER,
+  enforceAgentPolicy,
+  resolveAgent,
+  spendBudget,
+} from './world/agent.ts';
 import { requestSelfieCheck } from './world/selfie.ts';
 
 /**
@@ -39,72 +45,102 @@ export function createApp(key: SigningKey): Express {
   app.use(express.json());
 
   app.post('/sign/:requestId', (req, res) => {
-    if (!isSignRequestBody(req.body)) {
-      console.warn(`[sign] ${req.params.requestId}: invalid request body`);
-      res.status(400).json({ error: 'Invalid request body' });
-      return;
-    }
+    void (async (): Promise<void> => {
+      if (!isSignRequestBody(req.body)) {
+        console.warn(`[sign] ${req.params.requestId}: invalid request body`);
+        res.status(400).json({ error: 'Invalid request body' });
+        return;
+      }
 
-    if (req.body.fingerprint !== key.fingerprint) {
-      console.warn(
-        `[sign] ${req.params.requestId}: unknown key fingerprint ${req.body.fingerprint}`,
+      if (req.body.fingerprint !== key.fingerprint) {
+        console.warn(
+          `[sign] ${req.params.requestId}: unknown key fingerprint ${req.body.fingerprint}`,
+        );
+        res.status(404).json({ error: 'Unknown key fingerprint' });
+        return;
+      }
+
+      if (pendingRequests.has(req.params.requestId)) {
+        console.warn(
+          `[sign] ${req.params.requestId}: request ID already in use`,
+        );
+        res.status(409).json({ error: 'Request ID already in use' });
+        return;
+      }
+
+      // Which unique human is behind the agent asking for this signature?
+      const resourceUri = `${req.protocol}://${req.get('host') ?? 'localhost'}${req.originalUrl}`;
+      const identity = await resolveAgent(
+        req.header(AGENTKIT_HEADER),
+        resourceUri,
       );
-      res.status(404).json({ error: 'Unknown key fingerprint' });
-      return;
-    }
 
-    if (pendingRequests.has(req.params.requestId)) {
-      console.warn(`[sign] ${req.params.requestId}: request ID already in use`);
-      res.status(409).json({ error: 'Request ID already in use' });
-      return;
-    }
+      const refusal = enforceAgentPolicy(identity);
+      if (refusal) {
+        console.warn(`[sign] ${req.params.requestId}: ${refusal}`);
+        res.status(403).json({ error: refusal });
+        return;
+      }
 
-    console.log(
-      `[sign] ${req.params.requestId}: request received, awaiting approval`,
-    );
-
-    const data = Buffer.from(req.body.data, 'base64');
-    const signature = sign(key, data);
-
-    // Sign request is either approved or rejected (see pending-requests.ts for details)
-    // 403 error thrown if human rejects sign request themselves
-    const approval = awaitApproval(req.params.requestId, {
-      format: 'ssh-ed25519',
-      signature: signature.toString('base64'),
-    });
-
-    // Request selfie check url
-    requestSelfieCheck(req.params.requestId, data)
-      .then((connectorUri) => {
-        const pending = pendingRequests.get(req.params.requestId);
-        if (pending) {
-          pending.verificationUrl = connectorUri;
+      if (identity.status === 'human-backed') {
+        const budget = spendBudget(identity.humanId);
+        if (!budget.allowed) {
+          res.status(429).json({
+            error: `Daily human approval budget exhausted (${budget.used.toString()}/${budget.limit.toString()})`,
+          });
+          return;
         }
-      })
-      .catch((error: unknown) => {
-        console.error(
-          `[sign] ${req.params.requestId}: failed to start Selfie Check`,
-          error,
+        console.log(
+          `[agentkit] ${req.params.requestId}: human ${identity.humanId.slice(0, 10)}… budget ${budget.used.toString()}/${budget.limit.toString()}`,
         );
-        rejectPendingRequest(
-          req.params.requestId,
-          error instanceof Error
-            ? error.message
-            : 'Failed to start Selfie Check',
-        );
+      }
+
+      console.log(
+        `[sign] ${req.params.requestId}: request received, awaiting approval`,
+      );
+
+      const data = Buffer.from(req.body.data, 'base64');
+      const signature = sign(key, data);
+
+      // Sign request is either approved or rejected (see pending-requests.ts for details)
+      // 403 error thrown if human rejects sign request themselves
+      const approval = awaitApproval(req.params.requestId, {
+        format: 'ssh-ed25519',
+        signature: signature.toString('base64'),
       });
 
-    approval
-      .then((result) => {
+      // Request selfie check url
+      requestSelfieCheck(req.params.requestId, data)
+        .then((connectorUri) => {
+          const pending = pendingRequests.get(req.params.requestId);
+          if (pending) {
+            pending.verificationUrl = connectorUri;
+          }
+        })
+        .catch((error: unknown) => {
+          console.error(
+            `[sign] ${req.params.requestId}: failed to start Selfie Check`,
+            error,
+          );
+          rejectPendingRequest(
+            req.params.requestId,
+            error instanceof Error
+              ? error.message
+              : 'Failed to start Selfie Check',
+          );
+        });
+
+      try {
+        const result = await approval;
         console.log(`[sign] ${req.params.requestId}: approved`);
         res.status(200).json(result);
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         const reason =
           error instanceof Error ? error.message : 'Error rejected';
         console.log(`[sign] ${req.params.requestId}: rejected (${reason})`);
         res.status(403).json({ error: reason });
-      });
+      }
+    })();
   });
 
   app.get('/verify/:requestId', (req, res) => {
